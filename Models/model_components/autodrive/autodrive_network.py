@@ -6,6 +6,11 @@ from Models.model_components.common_layers import Conv
 IMAGE_WIDTH = 1024
 IMAGE_HEIGHT = 512
 
+# Fixed backbone hyperparameters: [in, p1, p2, p3, p4, p5]
+_WIDTH = [3, 16, 32, 64, 128, 256]
+_DEPTH = [1, 1, 1, 1, 1, 1]
+_CSP = [False, True]
+
 
 def fuse_conv(conv, norm):
     """Fuse Conv2d + BatchNorm2d into a single Conv2d for inference."""
@@ -31,14 +36,14 @@ def fuse_conv(conv, norm):
 
 
 class AutoDrive(nn.Module):
-    def __init__(self, width, depth, csp):
+    def __init__(self):
         super().__init__()
-        self.backbone = AutoDriveBackbone(width, depth, csp)
-        # self.head = AutoDriveHead(...)  — to be wired once head is designed
+        self.backbone = AutoDriveBackbone(_WIDTH, _DEPTH, _CSP)
+        # self.head = AutoDriveHead(...)  — wire when head is ready
 
     def forward(self, x):
         p5 = self.backbone(x)
-        # return self.head(p5)  — uncomment once head is ready
+        # return self.head(p5)
         return p5
 
     def fuse(self):
@@ -48,25 +53,3 @@ class AutoDrive(nn.Module):
                 m.forward = m.fuse_forward
                 delattr(m, 'norm')
         return self
-
-
-class AutoDriveNetwork:
-    """
-    Scale configurations mirror AutoSpeedNetwork conventions:
-        width : channel widths at each stage   [in, p1, p2, p3, p4, p5]
-        depth : C3K2 repetitions per stage
-        csp   : [use_residual_at_shallow, use_residual_at_deep]
-    """
-
-    def __init__(self):
-        self.dynamic_weighting = {
-            'n': {'csp': [False, True], 'depth': [1, 1, 1, 1, 1, 1], 'width': [3, 16,  32,  64,  128, 256]},
-            's': {'csp': [False, True], 'depth': [1, 1, 1, 1, 1, 1], 'width': [3, 32,  64,  128, 256, 512]},
-            'm': {'csp': [True,  True], 'depth': [1, 1, 1, 1, 1, 1], 'width': [3, 64,  128, 256, 512, 512]},
-            'l': {'csp': [True,  True], 'depth': [2, 2, 2, 2, 2, 2], 'width': [3, 64,  128, 256, 512, 512]},
-            'x': {'csp': [True,  True], 'depth': [2, 2, 2, 2, 2, 2], 'width': [3, 96,  192, 384, 768, 768]},
-        }
-
-    def build_model(self, version: str) -> AutoDrive:
-        cfg = self.dynamic_weighting[version]
-        return AutoDrive(cfg['width'], cfg['depth'], cfg['csp'])
