@@ -54,6 +54,19 @@ Config ConfigReader::loadFromFile(const std::string& config_path) {
     config.can_interface.enabled = parseBool(props["can_interface.enabled"]);
     config.can_interface.interface_name = props["can_interface.interface_name"];
 
+    config.camera_calibration.enabled =
+        props.find("camera_calibration.enabled") != props.end()
+            ? parseBool(props["camera_calibration.enabled"])
+            : true;
+    config.camera_calibration.inference_camera_config_path =
+        props.find("camera_calibration.inference_camera_config_path") != props.end()
+            ? props["camera_calibration.inference_camera_config_path"]
+            : "";
+    config.camera_calibration.standard_pose_config_path =
+        props.find("camera_calibration.standard_pose_config_path") != props.end()
+            ? props["camera_calibration.standard_pose_config_path"]
+            : "";
+ 
     // Longitudinal & pipeline tuning (with sensible defaults if keys are missing)
     config.longitudinal.autospeed_conf_thresh =
         props.find("longitudinal.autospeed.conf_thresh") != props.end()

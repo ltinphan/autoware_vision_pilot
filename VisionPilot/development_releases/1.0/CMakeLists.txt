@@ -192,6 +192,14 @@ target_link_libraries(camera_utils
     ${OpenCV_LIBS}
 )
 
+# Camera calibration module
+add_library(camera_calibration
+    src/camera/camera_calibration.cpp
+)
+target_link_libraries(camera_calibration
+    ${OpenCV_LIBS}
+)
+
 # Path planning module (polynomial fitting + Bayes filter)
 add_library(path_planning
     src/path_planning/estimator.cpp
@@ -349,6 +357,7 @@ set(VISIONPILOT_LIBS
     longitudinal_control
     visionpilot_publisher
     camera_utils
+    camera_calibration
     path_planning
     steering_control
     can_drivers

@@ -51,6 +51,12 @@ struct Config {
         std::string interface_name;
     } can_interface;
 
+    struct {
+        bool enabled;
+        std::string inference_camera_config_path;
+        std::string standard_pose_config_path;
+    } camera_calibration;
+
     // Longitudinal & pipeline tuning
     struct {
         float  autospeed_conf_thresh;   // Detection confidence threshold

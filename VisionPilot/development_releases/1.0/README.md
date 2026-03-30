@@ -121,6 +121,11 @@ Edit `visionpilot.conf` in this directory:
 - **Mode & source**
   - `mode=video` or `mode=camera`
   - `source.video.path=/path/to/video.mp4`
+- **Camera calibration (optional)**
+  - `camera_calibration.enabled=true/false`
+  - `camera_calibration.inference_camera_config_path=<INFERENCE_CAM_CONFIG_PATH>`
+  - `camera_calibration.standard_pose_config_path=<STANDARD_POSE_CONFIG_PATH>`
+  - Uses JSON schema from `VisionPilot/calibration/configs/`
 - **Models**
   - `models.egolanes.path=.../Egolanes_fp32.onnx`
   - `models.autosteer.path=.../AutoSteer_FP32.onnx`

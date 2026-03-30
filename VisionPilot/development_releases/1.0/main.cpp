@@ -30,6 +30,7 @@ using AutoSteerEngine =
 #include "lane_filtering/lane_filter.hpp"
 #include "lane_tracking/lane_tracking.hpp"
 #include "camera/camera_utils.hpp"
+#include "camera/camera_calibration.hpp"
 #include "path_planning/path_finder.hpp"
 #include "steering_control/steering_controller.hpp"
 #include "steering_control/steering_filter.hpp"
@@ -48,7 +49,6 @@ using AutoSteerEngine =
 #endif
 #include <opencv2/opencv.hpp>
 #include <thread>
-#include <queue>
 #include <mutex>
 #include <boost/circular_buffer.hpp>
 #include <condition_variable>
@@ -56,10 +56,10 @@ using AutoSteerEngine =
 #include <chrono>
 #include <iostream>
 #include <iomanip>
+#include <stdexcept>
  #include <fstream>
  #include <sstream>
  #include <cmath>
- #include <limits>
  #ifndef M_PI
  #define M_PI 3.14159265358979323846
  #endif
@@ -80,6 +80,149 @@ using namespace autoware_pov::vision::publisher;
 using namespace autoware_pov::drivers;
 using namespace autoware_pov::config;
 using namespace std::chrono;
+
+namespace {
+
+double degToRad(
+    const double deg
+) {
+    return deg * M_PI / 180.0;
+}
+
+double readJsonDoubleOrThrow(
+    const cv::FileNode& node,
+    const std::string& key,
+    const std::string& file_path
+) {
+    const cv::FileNode value = node[key];
+    if (value.empty()) {
+        throw std::runtime_error(
+            "Missing key '" + key + "' in " + file_path
+        );
+    }
+    return static_cast<double>(value);
+}
+
+double readMountHeightOrThrow(
+    const cv::FileNode& node,
+    const std::string& file_path
+) {
+    for (
+        const auto& key : {
+            "mount_height_m", 
+            "mounting_height", 
+            "camera_height"
+        }
+    ) {
+        const cv::FileNode value = node[key];
+        if (!value.empty()) {
+            return static_cast<double>(value);
+        }
+    }
+    throw std::runtime_error(
+        "Missing mount height key in " + file_path +
+        " (expected one of: mount_height_m, mounting_height, camera_height)"
+    );
+}
+
+cv::Mat computeStandardIntrinsics(
+    const int width,
+    const int height,
+    const double hfov_deg
+) {
+    const double focal = (static_cast<double>(width) / 2.0) /
+                         std::tan(degToRad(hfov_deg) / 2.0);
+    return (cv::Mat_<double>(3, 3)
+        << focal, 0.0, static_cast<double>(width) / 2.0,
+           0.0, focal, static_cast<double>(height) / 2.0,
+           0.0, 0.0, 1.0);
+}
+
+std::unique_ptr<CameraCalibration> createCameraCalibrationFromJson(
+    const std::string& inference_camera_config_path,
+    const std::string& standard_pose_config_path
+) {
+    cv::FileStorage fs_inference(
+        inference_camera_config_path, 
+        cv::FileStorage::READ | cv::FileStorage::FORMAT_JSON
+    );
+    cv::FileStorage fs_standard(
+        standard_pose_config_path, 
+        cv::FileStorage::READ | cv::FileStorage::FORMAT_JSON
+    );
+
+    if (!fs_inference.isOpened()) {
+        throw std::runtime_error(
+            "Failed to open inference camera config: " + inference_camera_config_path
+        );
+    }
+    if (!fs_standard.isOpened()) {
+        throw std::runtime_error(
+            "Failed to open standard pose config: " + standard_pose_config_path
+        );
+    }
+
+    CameraIntrinsics inference_intrinsics;
+    fs_inference["intrinsic_matrix"] >> inference_intrinsics.K;
+    if (inference_intrinsics.K.empty()) {
+        throw std::runtime_error(
+            "Missing or invalid intrinsic_matrix in " + inference_camera_config_path
+        );
+    }
+    if (inference_intrinsics.K.type() != CV_64F) {
+        inference_intrinsics.K.convertTo(inference_intrinsics.K, CV_64F);
+    }
+
+    const cv::FileNode dist = fs_inference["distortion_coefficients"];
+    if (dist.empty()) {
+        throw std::runtime_error(
+            "Missing distortion_coefficients in " + inference_camera_config_path
+        );
+    }
+
+    // Read distortion coefficients
+    inference_intrinsics.dist_coeffs = (cv::Mat_<double>(1, 5)
+        << readJsonDoubleOrThrow(dist, "k1", inference_camera_config_path),
+           readJsonDoubleOrThrow(dist, "k2", inference_camera_config_path),
+           readJsonDoubleOrThrow(dist, "p1", inference_camera_config_path),
+           readJsonDoubleOrThrow(dist, "p2", inference_camera_config_path),
+           readJsonDoubleOrThrow(dist, "k3", inference_camera_config_path));
+
+    // Read inference frame dimensions
+    inference_intrinsics.width = static_cast<int>(readJsonDoubleOrThrow(fs_inference.root(), "img_width", inference_camera_config_path));
+    inference_intrinsics.height = static_cast<int>(readJsonDoubleOrThrow(fs_inference.root(), "img_height", inference_camera_config_path));
+
+    // Read inference extrinsics (pitch yaw roll in degs, mounting height in meters)
+    CameraExtrinsics inference_extrinsics;
+    inference_extrinsics.pitch_rad = degToRad(readJsonDoubleOrThrow(fs_inference.root(), "pitch", inference_camera_config_path));
+    inference_extrinsics.yaw_rad = degToRad(readJsonDoubleOrThrow(fs_inference.root(), "yaw", inference_camera_config_path));
+    inference_extrinsics.roll_rad = degToRad(readJsonDoubleOrThrow(fs_inference.root(), "roll", inference_camera_config_path));
+    inference_extrinsics.mount_height_m = readMountHeightOrThrow(fs_inference.root(), inference_camera_config_path);
+
+    // Read standard intrinsics
+    CameraIntrinsics standard_intrinsics;
+    standard_intrinsics.width = static_cast<int>(readJsonDoubleOrThrow(fs_standard.root(), "img_width", standard_pose_config_path));
+    standard_intrinsics.height = static_cast<int>(readJsonDoubleOrThrow(fs_standard.root(), "img_height", standard_pose_config_path));
+    const double standard_hfov = readJsonDoubleOrThrow(fs_standard.root(), "hfov", standard_pose_config_path);
+    standard_intrinsics.K = computeStandardIntrinsics(standard_intrinsics.width,standard_intrinsics.height,standard_hfov);
+    standard_intrinsics.dist_coeffs = cv::Mat::zeros(1, 5, CV_64F);
+
+    // Read standard extrinsics (pitch yaw roll in degs, mounting height in meters)
+    CameraExtrinsics standard_extrinsics;
+    standard_extrinsics.pitch_rad = degToRad(readJsonDoubleOrThrow(fs_standard.root(), "pitch", standard_pose_config_path));
+    standard_extrinsics.yaw_rad = degToRad(readJsonDoubleOrThrow(fs_standard.root(), "yaw", standard_pose_config_path));
+    standard_extrinsics.roll_rad = degToRad(readJsonDoubleOrThrow(fs_standard.root(), "roll", standard_pose_config_path));
+    standard_extrinsics.mount_height_m = readMountHeightOrThrow(fs_standard.root(), standard_pose_config_path);
+
+    return std::make_unique<CameraCalibration>(
+        inference_intrinsics,
+        inference_extrinsics,
+        standard_intrinsics,
+        standard_extrinsics
+    );
+}
+
+}  // namespace
 
 // Thread-safe queue with max size limit (for display results only)
 template<typename T>
@@ -370,6 +513,7 @@ void captureThread(
     PerformanceMetrics& metrics,
     std::atomic<bool>& running,
     CanInterface* can_interface = nullptr,
+    CameraCalibration* camera_calibration = nullptr,
     double target_fps = 10.0)
 {
     cv::VideoCapture cap;
@@ -406,6 +550,7 @@ void captureThread(
     auto next_frame_time = steady_clock::now();
 
     int frame_number = 0;
+    bool calibration_error_logged = false;
     while (running.load()) {
         auto t_start = steady_clock::now();
         
@@ -429,6 +574,30 @@ void captureThread(
         if (can_interface) {
             can_interface->update(); // Poll socket
             current_state = can_interface->getState();
+        }
+
+        if (camera_calibration) {
+            try {
+                cv::Mat calibrated_frame = camera_calibration->processFrame(frame);
+
+                // Keep output dimensions stable for downstream modules that assume source size
+                if (calibrated_frame.size() != frame.size()) {
+                    cv::resize(
+                        calibrated_frame, 
+                        frame, frame.size(), 
+                        0, 0, 
+                        cv::INTER_LINEAR
+                    );
+                } else {
+                    frame = calibrated_frame;
+                }
+            } catch (const std::exception& e) {
+                if (!calibration_error_logged) {
+                    std::cerr << "[CameraCalibration] Frame processing failed, continuing with raw frames: "
+                              << e.what() << std::endl;
+                    calibration_error_logged = true;
+                }
+            }
         }
 
         // Write to double buffer (broadcasts to both lateral and longitudinal)
@@ -1602,6 +1771,31 @@ int main(int argc, char** argv)
     double K_i = config.steering_control.Ki;
     double K_d = config.steering_control.Kd;
     double K_S = config.steering_control.Ks;
+
+    std::unique_ptr<CameraCalibration> camera_calibration;
+    if (config.camera_calibration.enabled) {
+        const std::string& inference_camera_cfg = config.camera_calibration.inference_camera_config_path;
+        const std::string& standard_pose_cfg = config.camera_calibration.standard_pose_config_path;
+
+        if (inference_camera_cfg.empty() || standard_pose_cfg.empty()) {
+            std::cerr << "[CameraCalibration] Enabled but config paths are missing. "
+                      << "Please set camera_calibration.inference_camera_config_path and "
+                      << "camera_calibration.standard_pose_config_path. Continuing without calibration." << std::endl;
+        } else {
+            try {
+                camera_calibration = createCameraCalibrationFromJson(
+                    inference_camera_cfg, 
+                    standard_pose_cfg
+                );
+                std::cout << "[CameraCalibration] Enabled" << std::endl;
+                std::cout << "  inference config: " << inference_camera_cfg << std::endl;
+                std::cout << "  standard pose config: " << standard_pose_cfg << "\n" << std::endl;
+            } catch (const std::exception& e) {
+                std::cerr << "[CameraCalibration] Initialization failed. Continuing without calibration: "
+                          << e.what() << std::endl;
+            }
+        }
+    }
     
     if (save_video && !enable_viz) {
         std::cerr << "Warning: save_video requires enable_viz=true. Enabling visualization." << std::endl;
@@ -1892,7 +2086,7 @@ int main(int argc, char** argv)
     std::thread t_capture(captureThread, source, is_camera, 
                           std::ref(shared_frame_buffer),
                           std::ref(metrics), std::ref(running),
-                          can_interface.get(), config.capture_fps);
+                          can_interface.get(), camera_calibration.get(), config.capture_fps);
     
     // Lateral pipeline (reads from shared buffer)
     std::thread t_lateral_inference(lateralInferenceThread, std::ref(engine),
