@@ -569,7 +569,7 @@ def main():
                 viz = _viz_fields_from_cluster(cluster)
                 results.append({
                     "image": rec["image"],
-                    "cipo_detected": False,
+                    "cipo_detected": True,
                     "cipo_from_path": True,
                     "cipo_scenario": cipo_scenario,
                     "azimuth_radar_deg": az_result_deg,
@@ -657,6 +657,7 @@ def main():
             out = {
                 "image": rec["image"],
                 "cipo_detected": True,
+                "cipo_scenario": 1,
                 "bbox": bbox,
                 "azimuth_radar_deg": az_radar_deg,
                 "distance_m": round(D, 2),
@@ -677,7 +678,7 @@ def main():
             bbox = [fx1, fy1, fx2, fy2]
             results.append({
                 "image": rec["image"],
-                "cipo_detected": True,
+                "cipo_detected": False,
                 "bbox": bbox,
                 "azimuth_radar_deg": az_radar_deg,
                 "distance_m": None,
@@ -705,23 +706,24 @@ def main():
             continue
 
         best_D, best_V, best_gap = None, None, float("inf")
+        best_scenario = None
 
         def check_match(rj, ts_j, az_j, dt_s, D_ref, V_ref, is_forward):
             """is_forward: ref is from past -> D_est = D_ref + V_ref*dt"""
             if ts_j is None or D_ref is None or V_ref is None:
-                return None, None
+                return None, None, None
             if dt_s <= 0 or dt_s > MAX_GAP_S:
-                return None, None
+                return None, None, None
             daz = abs(np.angle(np.exp(1j * np.deg2rad(az_i - az_j))))
             if np.rad2deg(daz) > AZ_TOL_DEG:
-                return None, None
+                return None, None, None
             if is_forward:
                 D_est = D_ref + V_ref * dt_s
             else:
                 D_est = D_ref - V_ref * dt_s
             if D_est <= 0:
-                return None, None
-            return D_est, V_ref
+                return None, None, None
+            return D_est, V_ref, rj.get("cipo_scenario")
 
         # Look ahead (future frames): D(t) = D_future - V*dt
         for k in range(1, LOOKAHEAD + 1):
@@ -734,11 +736,12 @@ def main():
             ts_j = rj.get("image_timestamp_ns")
             az_j = rj.get("azimuth_radar_deg")
             dt_s = (ts_j - ts_i) / 1e9
-            D_est, V_est = check_match(rj, ts_j, az_j, dt_s, rj["distance_m"], rj["speed_ms"], is_forward=False)
+            D_est, V_est, scenario_est = check_match(rj, ts_j, az_j, dt_s, rj["distance_m"], rj["speed_ms"], is_forward=False)
             if D_est is not None and k < best_gap:
                 best_gap = k
                 best_D = D_est
                 best_V = V_est
+                best_scenario = scenario_est
 
         # Look behind (past frames): D(t) = D_past + V*dt
         for k in range(1, LOOKBEHIND + 1):
@@ -751,11 +754,12 @@ def main():
             ts_j = rj.get("image_timestamp_ns")
             az_j = rj.get("azimuth_radar_deg")
             dt_s = (ts_i - ts_j) / 1e9
-            D_est, V_est = check_match(rj, ts_j, az_j, dt_s, rj["distance_m"], rj["speed_ms"], is_forward=True)
+            D_est, V_est, scenario_est = check_match(rj, ts_j, az_j, dt_s, rj["distance_m"], rj["speed_ms"], is_forward=True)
             if D_est is not None and k < best_gap:
                 best_gap = k
                 best_D = D_est
                 best_V = V_est
+                best_scenario = scenario_est
 
         if best_D is not None:
             r["distance_m"] = round(best_D, 2)
@@ -763,6 +767,9 @@ def main():
             viz = _viz_fields_from_cluster({"range": best_D, "range_rate": best_V}, azimuth_rad_deg=az_i)
             r["bev_xy"] = viz.get("bev_xy")
             r["speed_ms_adjusted"] = viz.get("speed_ms_adjusted")
+            r["cipo_detected"] = True
+            if best_scenario is not None:
+                r["cipo_scenario"] = best_scenario
 
     # Pass 3: no-CIPO — path/radar association via neighbors ±TEMPORAL_NEIGHBOR_FRAMES (iterative)
     NO_CIPO_LOOKAHEAD = TEMPORAL_NEIGHBOR_FRAMES
@@ -843,6 +850,8 @@ def main():
                 r["speed_ms_adjusted"] = viz.get("speed_ms_adjusted")
                 r["cipo_from_path"] = True
                 r["track_from_neighbor"] = True
+                r["cipo_detected"] = True
+                r["cipo_scenario"] = 3
                 n_filled += 1
 
         if n_filled > 0:
