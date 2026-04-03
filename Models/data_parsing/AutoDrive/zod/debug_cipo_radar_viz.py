@@ -19,17 +19,9 @@ sys.path.insert(0, str(_ZOD_SCRIPT_DIR))
 from PIL import Image
 
 try:
-    from Models.inference.auto_speed_infer_50deg import (
-        AutoSpeed50Infer,
-        center_crop_50deg_resize,
-        pixel_to_h_angle_deg_50,
-    )
+    from Models.inference.auto_speed_infer import AutoSpeedNetworkInfer
 except ImportError:
-    from inference.auto_speed_infer_50deg import (
-        AutoSpeed50Infer,
-        center_crop_50deg_resize,
-        pixel_to_h_angle_deg_50,
-    )
+    from inference.auto_speed_infer import AutoSpeedNetworkInfer
 
 try:
     from sklearn.cluster import DBSCAN
@@ -49,6 +41,11 @@ def radar_spherical_to_cartesian(pts):
     y = rg * np.cos(el) * np.sin(az)
     z = rg * np.sin(el)
     return x, y, z
+
+
+def pixel_to_h_angle_deg(u: float, W: float, H: float, hfov_deg: float) -> float:
+    """Horizontal angle (deg) from optical axis for full-frame pixel u."""
+    return ((u - W / 2) / (W / 2)) * (hfov_deg / 2)
 
 
 def cam_dir_to_radar_azimuth(h_angle_deg, cam_ext, radar_ext):
@@ -395,7 +392,7 @@ def main():
     radar_ext = np.array(calib["radar_extrinsics"])
 
     radar_data = np.load(assoc["radar_npy_path"], allow_pickle=True)
-    model = AutoSpeed50Infer(str(model_path))
+    model = AutoSpeedNetworkInfer(str(model_path))
 
     color_map = {1: (0, 0, 255), 2: (0, 255, 255), 3: (255, 255, 0)}
 
@@ -410,8 +407,7 @@ def main():
 
         img_pil = Image.open(img_path).convert("RGB")
         img = cv2.cvtColor(np.array(img_pil), cv2.COLOR_RGB2BGR)
-        crop_img, crop_info = center_crop_50deg_resize(img_pil, W, H, hfov_deg)
-        preds = model.inference(crop_img, crop_info, W, H)
+        preds = model.inference(img_pil)
 
         # Level 1, 2 only (in-path). Exclude Level 3 (cyan, off-path).
         CIPO_CLASSES = (1, 2)
@@ -455,7 +451,7 @@ def main():
             cv2.circle(img, (int(u), int(y2)), 10, (0, 255, 0), 2)
             cv2.putText(img, "CIPO", (int(u) - 20, int(y2) - 12), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
 
-            h_angle_deg = pixel_to_h_angle_deg_50(u, crop_info)
+            h_angle_deg = pixel_to_h_angle_deg(u, W, H, hfov_deg)
             az_radar = cam_dir_to_radar_azimuth(h_angle_deg, cam_ext, radar_ext)
             az_radar_deg = np.rad2deg(az_radar)
 
