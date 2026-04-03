@@ -37,7 +37,6 @@ except ImportError:
     DBSCAN = None
 
 
-MODEL_PATH = Path(__file__).resolve().parents[4] / "VisionPilot/ROS2/data/models/autodrive.pt"
 _LAT_BUFFER_M = 0.5
 _LAT_BUFFER_PATH_M = 1.0  # when no CIPO: curvature path only, ±1.0m (no FOV/azimuth)
 
@@ -359,15 +358,22 @@ def main():
     parser.add_argument("--zod-root", type=str, default=None, required=True, help="Path to the ZOD dataset root")
     parser.add_argument("--every", type=int, default=10, help="Output every N frames")
     parser.add_argument("--output-dir", type=str, default=None)
-    parser.add_argument("--model-path", type=str, default=str(MODEL_PATH), help="Path to AutoSpeed model (autodrive.pt)")
+    parser.add_argument(
+        "--model-path",
+        type=str,
+        default=None,
+        help="Path to AutoSpeed weights (default: {zod_root}/models/autodrive.pt)",
+    )
     args = parser.parse_args()
 
     seq = args.sequence
     zod = Path(args.zod_root)
-    out_dir = Path(args.output_dir) if args.output_dir else Path(__file__).parent / "debug_viz" / seq
-    out_dir.mkdir(parents=True, exist_ok=True)
+    from zod_utils import default_autospeed_checkpoint, get_images_blur_dir, get_calibration_path, sequence_output_dir
 
-    from zod_utils import get_images_blur_dir, get_calibration_path
+    model_path = Path(args.model_path) if args.model_path else default_autospeed_checkpoint(zod)
+
+    out_dir = Path(args.output_dir) if args.output_dir else sequence_output_dir(zod, seq) / "debug_viz"
+    out_dir.mkdir(parents=True, exist_ok=True)
     img_dir = get_images_blur_dir(zod, seq)
     calib_path = get_calibration_path(zod, seq)
     assoc_path = zod / "associations" / f"{seq}_associations.json"
@@ -389,7 +395,7 @@ def main():
     radar_ext = np.array(calib["radar_extrinsics"])
 
     radar_data = np.load(assoc["radar_npy_path"], allow_pickle=True)
-    model = AutoSpeed50Infer(str(args.model_path))
+    model = AutoSpeed50Infer(str(model_path))
 
     color_map = {1: (0, 0, 255), 2: (0, 255, 255), 3: (255, 255, 0)}
 

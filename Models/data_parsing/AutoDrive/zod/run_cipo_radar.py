@@ -36,8 +36,6 @@ except ImportError:
     DBSCAN = None
 
 
-MODEL_PATH = Path(__file__).resolve().parents[4] / "VisionPilot/ROS2/data/models/autodrive.pt"
-
 _LAT_BUFFER_M = 0.5        # ±0.5m lateral buffer for CIPO-radar (Scenario 1) azimuth association
 _LAT_BUFFER_RELAXED_M = 1.0  # fallback cone for CIPO when strict cone finds no cluster
 _LAT_BUFFER_PATH_M = 1.0   # no-CIPO path search: ±1.0m lateral from curvature path
@@ -51,7 +49,12 @@ _STEERING_COLUMN_RATIO = 16.8  # steering wheel deg / tyre deg
 _ZOD_SCRIPT_DIR = Path(__file__).resolve().parent
 if str(_ZOD_SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(_ZOD_SCRIPT_DIR))
-from zod_utils import get_images_blur_dir, get_calibration_path
+from zod_utils import (
+    default_autospeed_checkpoint,
+    get_images_blur_dir,
+    get_calibration_path,
+    sequence_output_dir,
+)
 
 
 def parse_image_timestamp(fname: Path) -> int:
@@ -392,11 +395,22 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--sequence", type=str, default="000479")
     parser.add_argument("--zod-root", type=str, default=None, required=True, help="ZOD dataset root (contains images_blur_* folders, radar_front/, infos/, vehicle_data/, etc.)")
-    parser.add_argument("--output", type=str, default=None, help="Output path for cipo_radar.json (default: cipo_radar_{seq}.json)")
-    parser.add_argument("--model-path", type=str, default=str(MODEL_PATH), help="Path to AutoSpeed model (autodrive.pt)")
+    parser.add_argument(
+        "--output",
+        type=str,
+        default=None,
+        help="Output path for cipo_radar.json (default: {zod_root}/output/{seq}/cipo_radar.json)",
+    )
+    parser.add_argument(
+        "--model-path",
+        type=str,
+        default=None,
+        help="Path to AutoSpeed weights (default: {zod_root}/models/autodrive.pt)",
+    )
     args = parser.parse_args()
     seq = args.sequence
     zod = Path(args.zod_root)
+    model_path = Path(args.model_path) if args.model_path else default_autospeed_checkpoint(zod)
     img_dir = get_images_blur_dir(zod, seq)
     calib_path = get_calibration_path(zod, seq)
     radar_dir = zod / "radar_front" / "sequences" / seq / "radar_front"
@@ -424,9 +438,9 @@ def main():
     radar_ext = np.array(calib["radar_extrinsics"])
 
     radar_data = np.load(assoc["radar_npy_path"], allow_pickle=True)
-    model = AutoSpeed50Infer(str(args.model_path))
+    model = AutoSpeed50Infer(str(model_path))
 
-    out_path = Path(args.output) if args.output else Path(__file__).parent / f"cipo_radar_{seq}.json"
+    out_path = Path(args.output) if args.output else sequence_output_dir(zod, seq) / "cipo_radar.json"
     out_path.parent.mkdir(parents=True, exist_ok=True)
     sample_saved = False
 

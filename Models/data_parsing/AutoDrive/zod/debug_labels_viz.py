@@ -117,11 +117,12 @@ def main():
     labels_dir = Path(args.labels_dir) if args.labels_dir else zod / "labels" / seq
     _ZOD_SCRIPT_DIR = Path(__file__).resolve().parent
     sys.path.insert(0, str(_ZOD_SCRIPT_DIR))
-    from zod_utils import get_images_blur_dir
+    from zod_utils import get_images_blur_dir, sequence_output_dir
     img_dir = get_images_blur_dir(zod, seq)
     assoc_path = zod / "associations" / f"{seq}_associations.json"
 
-    cipo_path = Path(args.cipo_radar) if args.cipo_radar else Path(__file__).parent / "output" / seq / "cipo_radar.json"
+    default_cipo = sequence_output_dir(zod, seq) / "cipo_radar.json"
+    cipo_path = Path(args.cipo_radar) if args.cipo_radar else default_cipo
     if not cipo_path.exists():
         cipo_path = Path(__file__).parent / f"cipo_radar_{seq}.json"
     if not cipo_path.exists():
@@ -163,7 +164,7 @@ def main():
     n = min(args.n, len(valid_stems))
     selected_stems = random.sample(valid_stems, n)
 
-    out_dir = Path(args.output_dir) if args.output_dir else Path(__file__).parent / "output" / seq / "debug_labels"
+    out_dir = Path(args.output_dir) if args.output_dir else sequence_output_dir(zod, seq) / "debug_labels"
     out_dir.mkdir(parents=True, exist_ok=True)
 
     n_saved = 0
