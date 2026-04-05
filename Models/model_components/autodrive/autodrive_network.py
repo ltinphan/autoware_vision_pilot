@@ -12,12 +12,16 @@ _CSP = [False, True]
 
 
 class AutoDrive(nn.Module):
-    """Shared backbone on previous and current frame; head fuses both P5 features."""
+    """Shared backbone on previous and current frame; head concatenates P5 maps then conv+SiLU to 2×H×W, flatten, MLP."""
 
     def __init__(self):
         super().__init__()
         self.backbone = AutoDriveBackbone(_WIDTH, _DEPTH, _CSP)
-        self.head = AutoDriveHead(in_channels=_WIDTH[5])
+        self.head = AutoDriveHead(
+            in_channels=_WIDTH[5],
+            p5_h=IMAGE_HEIGHT // 32,
+            p5_w=IMAGE_WIDTH // 32,
+        )
 
     def forward(self, image_prev, image_curr):
         """Returns (distance, curvature, cipo_presence): d_norm (B,1), curvature (B,1), CIPO logits (B,2)."""
