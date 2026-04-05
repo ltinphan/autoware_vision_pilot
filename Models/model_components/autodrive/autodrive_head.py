@@ -13,13 +13,13 @@ class AutoDriveHead(nn.Module):
 
     Compression path
     ----------------
-    cat([feature_prev, feature_curr], dim=1)  → (B, 2C, H, W)
-    AdaptiveAvgPool2d((1, 2))                   → (B, 2C, 1, 2)
-    flatten                                   → (B, 2C*2) = (B, 1024) for C=256
+    cat([feature_prev, feature_curr], dim=1)  → (B, 2C, H, W)  e.g. C=256 → (B, 512, H, W)
+    Conv 2C→256 → SiLU → Conv 256→64 → SiLU → Conv 64→2 → SiLU
+    flatten                                   → (B, 2·H·W); e.g. H=16, W=32 → (B, 1024)
 
     Shared trunk
     ------------
-    FC1  : Linear(1024, 768) + ReLU
+    FC1  : Linear(2·p5_h·p5_w, 768) + ReLU  (p5_h, p5_w = spatial size of P5 maps)
     FC2  : Linear(768,  512) + ReLU
 
     Task branches
@@ -33,13 +33,16 @@ class AutoDriveHead(nn.Module):
                      (CrossEntropyLoss in training; argmax or softmax at inference)
     """
 
-    def __init__(self, in_channels: int = 256):
+    def __init__(self, in_channels: int = 256, p5_h: int = 16, p5_w: int = 32):
         super().__init__()
 
-        # Two P5 maps concatenated on channel → pool to fixed 1024-d vector
-        self.pool = nn.AdaptiveAvgPool2d((1, 2))
-        flat_dim = in_channels * 2 * 2  # 256 * 4 = 1024
+        concat_c = 2 * in_channels
+        self.conv_1 = nn.Conv2d(concat_c, 256, kernel_size=3, stride=1, padding=1)
+        self.conv_2 = nn.Conv2d(256, 64, kernel_size=3, stride=1, padding=1)
+        self.conv_3 = nn.Conv2d(64, 2, kernel_size=3, stride=1, padding=1)
+        self.act = nn.SiLU(inplace=True)
 
+        flat_dim = 2 * p5_h * p5_w
         self.fc1 = nn.Sequential(
             nn.Linear(flat_dim, 768),
             nn.ReLU(inplace=True),
@@ -62,7 +65,12 @@ class AutoDriveHead(nn.Module):
 
     def forward(self, feature_prev: torch.Tensor, feature_curr: torch.Tensor):
         x = torch.cat([feature_prev, feature_curr], dim=1)
-        x = self.pool(x)
+        x = self.conv_1(x)
+        x = self.act(x)
+        x = self.conv_2(x)
+        x = self.act(x)
+        x = self.conv_3(x)
+        x = self.act(x)
         x = x.flatten(1)
 
         x = self.fc1(x)
