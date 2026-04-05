@@ -56,7 +56,7 @@ class AutoDriveHead(nn.Module):
 
         self.distance_head = nn.Sequential(
             nn.Linear(512, 1),
-            nn.Sigmoid(),
+            nn.ReLU(),
         )
 
         self.curvature_head = nn.Linear(512, 1)
