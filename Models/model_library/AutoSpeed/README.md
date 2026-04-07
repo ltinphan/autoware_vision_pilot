@@ -9,8 +9,7 @@ The AutoSpeed model detects all foreground objects and classifies objects into t
 - objects outside of the future driving path of the ego-car
 
 ### Demo Video
-
-<iframe src="https://drive.google.com/file/d/1ehH3nRKsZLmPqZsqoqFuwyx6HCy2EVxe/preview" width="640" height="480"></iframe>
+[![Watch the Video](../../../Media/AutoSpeed_2_thumbnail.jpg)](https://drive.google.com/file/d/1ehH3nRKsZLmPqZsqoqFuwyx6HCy2EVxe/preview)
 
 ### Performance Results
 
