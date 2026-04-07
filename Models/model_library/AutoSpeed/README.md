@@ -1,4 +1,4 @@
-## AutoSpeed - closest in-path object detection
+## AutoSpeed 2.0 - closest in-path object detection
 
 For autonomous cruise conrol applications, it is crucial to maintain a safe following distance from the vehicle in front, known as the closest-in-path object. Detecting the closest-in-path object therefore becomes a very important task for any self-driving or driver assitance application, as it also supports important safety features such as forward collision warning and autonomous emergency braking. The AutoSpeed network is a bounding box detection model inspired by the YOLOv11 architecture, in which the backbone c3k2 blocks are substitued by a custom designed 'context' block for improved overall scene understanding.
 
@@ -20,12 +20,12 @@ To easily try out the model on your own images and videos, please follow the ste
 The AutoSpeed network is trained on the [OpenLane](https://github.com/OpenDriveLab/OpenLane) dataset on the CIPO detection task. We modify the ground-truth labels by merging 'Level 3' and 'Level 4' category objects in the ground truth dataset into a single class. We use a 90:10 ratio for train:val split, and we achieve a **mAP@50 score of 0.74** and a **mAP score of 0.56** on validation data.
 
 ## Model variants
-The AutoSpeed network is trained in two variants, the original AutoSpeed network processess frames in square aspect ratio with size 640px by 640px. AutoSpeed 2.0 processess frames in a 2:1 aspect ratio with size 512px by 1024 px, allowing for objects to be detected further away and a wider viewing angle of the scene which is more suited to autonomous driving applications.
+The AutoSpeed network is trained in two variants, the original AutoSpeed network processess frames in square aspect ratio with size 640px by 640px. AutoSpeed 2.0 processess frames in a 2:1 aspect ratio with size 512px by 1024 px, allowing for objects to be detected further away and a wider viewing angle of the scene which is more suited to autonomous driving applications. We recommend you work with AutoSpeed 2.0 for new applications and developments.
 
 **AutoSpeed 2.0 model weights - 2:1 aspect ratio, 512px by 1024px input image**
 - [Link to Download Pytorch Model Weights *.pth](https://drive.google.com/file/d/1L8oiuszUKFmLZxsgIp1wtzgSkj2pr6n7/view?usp=drive_link)
 - [Link to Download ONNX FP32 Weights *.onnx](https://drive.google.com/file/d/1bKYsnKbHD8DvQB2w3x6yu0Htup4KL2l5/view?usp=drive_link)
 
-**AutoSpeed model weights - 1:1 aspect ratio, 640px by 640px input image**
+AutoSpeed model weights - 1:1 aspect ratio, 640px by 640px input image
 - [Link to Download Pytorch Model Weights (*.pth)](https://drive.google.com/file/d/1iD-LKf5wSuvf0F5OHVHH3znGEvSIS8LY/view?usp=drive_link)
 - [Link to Download ONNX FP32 Moel Height (*.onnx)](https://drive.google.com/file/d/1Zhe8uXPbrPr8cvcwHkl1Hv0877HHbxbB/view?usp=drive_link)
