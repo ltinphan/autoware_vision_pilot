@@ -1,9 +1,9 @@
 import torch
 import sys
 sys.path.append('../../../')
-from Models.model_components.auto_speed.auto_speed_backbone import AutoSpeedBackbone
-from Models.model_components.auto_speed.auto_speed_neck import AutoSpeedNeck
-from Models.model_components.auto_speed.auto_speed_head import AutoSpeedHead
+from Models.model_components.auto_steer.auto_steer_backbone import AutoSteerBackbone
+from Models.model_components.auto_steer.auto_steer_neck import AutoSteerNeck
+from Models.model_components.auto_steer.auto_steer_percept_head import AutoSteerPerceptHead
 from Models.model_components.common_layers import Conv
 
 image_width = 1024
@@ -32,19 +32,15 @@ def fuse_conv(conv, norm):
 class YOLO(torch.nn.Module):
     def __init__(self, width, depth, csp, num_classes):
         super().__init__()
-        self.net = AutoSpeedBackbone(width, depth, csp)
-        self.fpn = AutoSpeedNeck(width, depth, csp)
-
-        img_dummy = torch.zeros(1, width[0], image_height, image_width)
-        self.head = AutoSpeedHead(num_classes, (width[3], width[4], width[5]))
-        self.head.stride = torch.tensor([img_dummy.shape[-2] / x.shape[-2] for x in self.forward(img_dummy)])
-        self.stride = self.head.stride
-        self.head.initialize_biases()
+        self.net = AutoSteerBackbone(width, depth, csp)
+        self.fpn = AutoSteerNeck(width, depth, csp)
+        self.head = AutoSteerPerceptHead(num_classes, width[4])
 
     def forward(self, x):
         x = self.net(x)
         x = self.fpn(x)
-        return self.head(list(x))
+        output = self.head(x)
+        return output
 
     def fuse(self):
         for m in self.modules():
@@ -55,7 +51,7 @@ class YOLO(torch.nn.Module):
         return self
 
 
-class AutoSpeedNetwork:
+class AutoSteerNetwork:
     def __init__(self):
         self.dynamic_weighting = {
             'n': {'csp': [False, True], 'depth': [1, 1, 1, 1, 1, 1], 'width': [3, 16, 32, 64, 128, 256]},
