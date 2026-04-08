@@ -70,3 +70,17 @@ class AutoSpeedNetwork:
         depth = self.dynamic_weighting[version]['depth']
         width = self.dynamic_weighting[version]['width']
         return YOLO(width, depth, csp, num_classes)
+
+    def load_model(self, version, num_classes, checkpoint_path):
+        csp = self.dynamic_weighting[version]['csp']
+        depth = self.dynamic_weighting[version]['depth']
+        width = self.dynamic_weighting[version]['width']
+        model = YOLO(width, depth, csp, num_classes)
+
+        ckpt = torch.load(checkpoint_path, weights_only=False)
+        loaded_model = ckpt['model']
+        state_dict = loaded_model.state_dict()
+
+        model.load_state_dict(state_dict)
+
+        return model
