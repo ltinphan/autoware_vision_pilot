@@ -19,9 +19,12 @@ from torch.utils.tensorboard import SummaryWriter
 warnings.filterwarnings("ignore")
 
 
-def train(args, params, run_dir, log_writer):
+def train(args, params, run_dir, log_writer, checkpoint_path=None):
     # Model
-    model = AutoSpeedNetwork().build_model(version=args.version, num_classes=4)
+    if checkpoint_path:
+        model = AutoSpeedNetwork().load_model(version=args.version, num_classes=4, checkpoint_path=checkpoint_path)
+    else:
+        model = AutoSpeedNetwork().build_model(version=args.version, num_classes=4)
     model.cuda()
 
     # Optimizer
@@ -269,7 +272,8 @@ if __name__ == "__main__":
     parser.add_argument('--version', default='n', type=str)
     # parser.add_argument('--epochs', default=30, type=int)
     parser.add_argument('--runs_dir', default="runs", type=str)
-    parser.add_argument('--epochs', default=50, type=int)
+    parser.add_argument('--checkpoint_path', type=str, default=None, help="Pretrained checkpoint path")
+    parser.add_argument('--epochs', default=150, type=int)
 
     args = parser.parse_args()
 
@@ -287,6 +291,8 @@ if __name__ == "__main__":
         os.makedirs(weights_dir)
     log_writer = SummaryWriter(log_dir=run_dir)
 
+    checkpoint_path = args.checkpoint_path
+
     if args.distributed:
         torch.cuda.set_device(device=args.local_rank)
         torch.distributed.init_process_group(backend='nccl', init_method='env://')
@@ -303,7 +309,7 @@ if __name__ == "__main__":
 
     profile(args, params)
 
-    train(args, params, run_dir, log_writer)
+    train(args, params, run_dir, log_writer, checkpoint_path)
 
     # Clean
     if args.distributed:
