@@ -73,6 +73,7 @@ class AutoDriveTrainer:
     _CIPO_POS_WEIGHT = torch.tensor([0.295 / 0.705])  # ≈ 0.418
     _CURV_LOSS_W = 2.0
     _DIST_LOSS_W = 2.0
+    _FLAG_VAL_THRESHOLD = 0.65
     _WHEELBASE_M = 2.984
     _STEERING_COLUMN_RATIO = 16.8
 
@@ -281,7 +282,9 @@ class AutoDriveTrainer:
             loss_f
         )
 
-        pred_label = (flag_logits > 0.0).float()
+        # Validation/Test classification threshold on probability (not on raw logit)
+        flag_prob = torch.sigmoid(flag_logits)
+        pred_label = (flag_prob > self._FLAG_VAL_THRESHOLD).float()
         flag_acc   = (pred_label == self.flag_gt).float().mean().item() * 100.0
 
         # Curvature (normalised) -> physical (1/m) -> steering wheel angle (deg)
