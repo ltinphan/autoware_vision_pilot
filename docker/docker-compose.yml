@@ -1,0 +1,12 @@
+version: '3.8'
+services:
+  sim:
+    build: .
+    image: visionpilot-sim
+    volumes:
+      - ./:/workspace
+    working_dir: /workspace
+    entrypoint: ["python3", "Models/inference/cli.py"]
+    command: ["--help"]
+    restart: "no"
+    network_mode: "none"

@@ -1,0 +1,7 @@
+model: SceneSeg
+checkpoint: Models/model_library/SceneSeg/checkpoint.pth
+input: Media/daytime_fair_weather_1.jpg
+out_dir: outputs/scene_seg
+conf_thres: 0.3
+iou_thres: 0.45
+device: cpu

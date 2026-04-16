@@ -24,3 +24,13 @@ To stay up to date on developments related to Autoware, please visit our website
 - [YouTube Channel](https://www.youtube.com/@autowarefoundation)
 - [Twitter/X Page](https://twitter.com/AutowareFdn)
 
+
+## Quick environment setup for running the MVP pipeline
+
+- Python 3.10+
+- Install dependencies (if Models/requirements.txt exists):
+  pip install -r Models/requirements.txt
+- Minimal packages if requirements.txt is missing:
+  pip install torch torchvision pillow numpy
+
+Model checkpoints are not committed; download them from Models/model_library/<Model>/README.md and place under Models/model_library/<Model>/

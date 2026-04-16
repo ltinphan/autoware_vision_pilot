@@ -1,0 +1,60 @@
+{
+  "phases": [
+    {
+      "number": 1,
+      "name": "MVP Perception Pipeline",
+      "slug": "perception-pipeline",
+      "goal": "Run prebuilt EgoLanes model on sample images and output lane detections",
+      "success_criteria": [
+        "EgoLanes model downloads and loads successfully",
+        "CLI can run inference on sample images",
+        "Outputs are saved to disk in numpy format",
+        "Docker container builds and runs"
+      ],
+      "status": "in_progress",
+      "requirements": []
+    },
+    {
+      "number": 2,
+      "name": "Simulation Environment",
+      "slug": "simulation-env",
+      "goal": "Provide Docker environment and simulation scripts for CARLA/SODA.Sim",
+      "success_criteria": [
+        "CARLA simulation script launches successfully",
+        "SODA.Sim simulation script launches successfully",
+        "Docker compose can orchestrate simulation services",
+        "EgoLanes client can connect to simulation"
+      ],
+      "status": "not_started",
+      "requirements": []
+    },
+    {
+      "number": 3,
+      "name": "Integration Testing",
+      "slug": "integration-testing",
+      "goal": "Test end-to-end simulation with EgoLanes inference",
+      "success_criteria": [
+        "CARLA client spawns vehicle and captures frames",
+        "Real-time inference runs on simulation frames",
+        "Results are visualized and saved",
+        "All tests pass"
+      ],
+      "status": "not_started",
+      "requirements": []
+    },
+    {
+      "number": 4,
+      "name": "Documentation and Polish",
+      "slug": "documentation",
+      "goal": "Complete documentation and developer onboarding",
+      "success_criteria": [
+        "README updated with usage examples",
+        "Developer guide created",
+        "All scripts documented",
+        "CI/CD ready (if applicable)"
+      ],
+      "status": "not_started",
+      "requirements": []
+    }
+  ]
+}

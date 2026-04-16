@@ -63,3 +63,9 @@ As part of our technology roadmap, we will sequentially develop multiple version
 
 ## Models
 The Models folder contains all code related to AI model development
+
+## Run the MVP perception pipeline
+
+Example (replace checkpoint path):
+
+python3 Models/inference/cli.py --model SceneSeg --checkpoint Models/model_library/SceneSeg/checkpoint.pth --input Media/daytime_fair_weather_1.jpg --out_dir outputs/scene_seg --device cpu
